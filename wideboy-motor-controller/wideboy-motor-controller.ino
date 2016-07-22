@@ -16,30 +16,30 @@
 
 struct motor_control_data
 {
-  uint8_t button_a;            // Address 3
+  uint8_t button_a;            
   uint8_t button_b;
   uint8_t button_c;
 
-  uint8_t cell_count;          // Address 21
-  uint16_t battery_millivolts; // Address 24
-  uint16_t low_voltage_cutoff; // Address 22
+  uint8_t cell_count;          
+  uint16_t battery_millivolts; 
+  uint16_t low_voltage_cutoff; 
 
-  uint32_t left_motor_count;   // Address 9
-  uint32_t right_motor_count;  // Address 13
-  uint16_t left_motor_speed;   // Address 17
-  uint16_t right_motor_speed;  // Address 19
+  uint32_t left_motor_count;
+  uint32_t right_motor_count;
+  uint16_t left_motor_speed;
+  uint16_t right_motor_speed;
 
-  int16_t left_motor;          // Address 4
-  int16_t right_motor;         // Address 6
+  int16_t left_motor;
+  int16_t right_motor;
 
-  bool clear_motor_counts;     // Address 8
+  bool clear_motor_counts;
 
-  bool yellow;                 // Address 0
-  bool green;                  // Address 1
-  bool red;                    // Address 2
+  bool yellow;
+  bool green;
+  bool red;
   
-  bool play_notes;             // Address 27
-  char notes[16];              // Address 28
+  bool play_notes;
+  char notes[16];
 };
 
 const unsigned long speed_sample_rate = 20000;
@@ -94,7 +94,7 @@ void error()
   // Turn off PI
   enable_pi_power(false);
   
-  // Loop forevery
+  // Loop forever
   while (true) {
 
     // Flash the red led
