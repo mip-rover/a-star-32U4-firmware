@@ -91,6 +91,9 @@ void error()
   // Kill the motors */
   motors.setSpeeds(0, 0);
 
+  // Turn off PI
+  enable_pi_power(false);
+  
   // Loop forevery
   while (true) {
 
