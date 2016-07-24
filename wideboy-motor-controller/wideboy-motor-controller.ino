@@ -245,25 +245,29 @@ void loop()
 
   // Track power source
   if (is_battery_power()) {
+
+    // Should we determine the battery count
     if (slave.buffer.cell_count == 0) {
       slave.buffer.cell_count = count_cells();
       slave.buffer.low_voltage_cutoff = slave.buffer.cell_count * cell_noload_low_v;
+      slave.buffer.battery_millivolts = readBatteryMillivoltsSV();
       enable_pi_power(true);
+    }
+    
+    // Monitor battery status
+    if (slave.buffer.cell_count != 0 && last_battery_read > battery_monitor_rate) {
+      slave.buffer.battery_millivolts = readBatteryMillivoltsSV();
+      if (slave.buffer.battery_millivolts < slave.buffer.low_voltage_cutoff)
+        error();
+      last_battery_read = 0;
     }
   } else {
     slave.buffer.cell_count = 0;
+    slave.buffer.battery_millivolts = 0;
     slave.buffer.low_voltage_cutoff = 0;
     enable_pi_power(false);
   }
 
-  // Monitor battery status
-  if (slave.buffer.cell_count != 0 && last_battery_read > battery_monitor_rate) {
-    slave.buffer.battery_millivolts = readBatteryMillivoltsSV();
-    if (slave.buffer.battery_millivolts < slave.buffer.low_voltage_cutoff)
-      error();
-    last_battery_read = 0;
-  }
- 
   // Track leds
   ledYellow(slave.buffer.yellow);
   ledGreen(slave.buffer.green);
