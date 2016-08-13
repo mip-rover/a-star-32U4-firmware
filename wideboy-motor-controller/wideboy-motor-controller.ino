@@ -16,30 +16,30 @@
 
 struct motor_control_data
 {
-  uint8_t button_a;            
-  uint8_t button_b;
-  uint8_t button_c;
+  uint8_t button_a;            //  0            
+  uint8_t button_b;            //  1
+  uint8_t button_c;            //  2
 
-  uint8_t cell_count;          
-  uint16_t battery_millivolts; 
-  uint16_t low_voltage_cutoff; 
+  uint8_t cell_count;          //  3       
+  uint16_t battery_millivolts; //  4
+  uint16_t low_voltage_cutoff; //  6
 
-  uint32_t left_motor_count;
-  uint32_t right_motor_count;
-  uint16_t left_motor_speed;
-  uint16_t right_motor_speed;
+  int32_t left_motor_count;    //  8
+  int32_t right_motor_count;   // 12
+  uint16_t left_motor_speed;   // 16
+  uint16_t right_motor_speed;  // 18
 
-  int16_t left_motor;
-  int16_t right_motor;
+  int16_t left_motor;          // 20
+  int16_t right_motor;         // 22
 
-  bool clear_motor_counts;
+  bool clear_motor_counts;     // 24
 
-  bool yellow;
-  bool green;
-  bool red;
+  bool yellow;                 // 25
+  bool green;                  // 26
+  bool red;                    // 27
   
-  bool play_notes;
-  char notes[16];
+  bool play_notes;             // 28
+  char notes[16];              // 29
 };
 
 const unsigned long speed_sample_rate = 20000;
@@ -47,6 +47,7 @@ const unsigned int cell_low_v = 3300;
 const unsigned int cell_noload_low_v = 3700;
 const unsigned int cell_noload_high_v = 4200;
 const unsigned int battery_monitor_rate = 5000;
+const int8_t encoder_lookup[] = {0, -1, 1, 0, 1, 0, 0, -1, -1, 0, 0, 1, 0, 1, -1, 0};
 
 PololuRPiSlave<struct motor_control_data, 10> slave;
 
@@ -57,16 +58,16 @@ AStar32U4ButtonC button_c;
 AStar32U4Motors motors;
 
 elapsedMillis last_battery_read;
+elapsedMillis time_to_debug;
+
 bool load_notes = true;
 
-unsigned short left_motor_count_a = 0;
-unsigned short left_motor_count_b = 0;
-unsigned short right_motor_count_a = 0;
-unsigned short right_motor_count_b = 0;
-unsigned long left_motor_count = 0;
-unsigned long right_motor_count = 0;
-unsigned short left_motor_speed = 0;
-unsigned short right_motor_speed = 0;
+uint8_t isr_left_encoder_val = 0;
+uint8_t isr_right_encoder_val = 0;
+short isr_left_motor_count = 0;
+short isr_right_motor_count = 0;
+int32_t left_motor_count = 0;
+int32_t right_motor_count = 0;
 
 static inline bool is_battery_power()
 {
@@ -110,39 +111,28 @@ void error()
 }
 
 
-void count_left_motor_a()
+void count_left_motor()
 {
-  ++left_motor_count_a;
+  isr_left_encoder_val = isr_left_encoder_val << 2;
+  isr_left_encoder_val = isr_left_encoder_val | ((PINB & 0b00000110) >> 1);
+  isr_left_motor_count += encoder_lookup[isr_left_encoder_val & 0b00001111];
 }
 
-void count_left_motor_b()
+void count_right_motor()
 {
-  ++left_motor_count_b;
-}
-
-void count_right_motor_a()
-{
-  ++right_motor_count_a;
-}
-
-void count_right_motor_b()
-{
-  ++right_motor_count_b;
+  uint8_t port_e = PINE; // channel a
+  uint8_t port_b = PINB; // channel b
+  isr_right_encoder_val = isr_right_encoder_val << 2;
+  isr_right_encoder_val = isr_right_encoder_val | (port_e & 0b01000000) >> 5 | (port_b & 0b00010000) >> 4;;
+  isr_right_motor_count += encoder_lookup[isr_right_encoder_val & 0b00001111];
 }
 
 void update_motor_counts()
 {
-  left_motor_speed = left_motor_count_a + left_motor_count_b;
-  right_motor_speed = right_motor_count_a + right_motor_count_b;
-
-  left_motor_count += left_motor_speed;
-  right_motor_count += right_motor_speed;
-
-  left_motor_count_a = 0;
-  left_motor_count_b = 0;
-
-  right_motor_count_a = 0;
-  right_motor_count_b = 0;
+  left_motor_count += isr_left_motor_count;
+  right_motor_count += isr_right_motor_count;
+  isr_left_motor_count = 0;
+  isr_right_motor_count = 0;
  }
 
 uint8_t count_cells()
@@ -205,10 +195,10 @@ void setup()
   pinMode(RPI_POWER_PIN, OUTPUT);
 
   // Enable the encoder interrupts
-  enableInterrupt(LEFT_MOTOR_ENCODER_PIN_A, count_left_motor_a, CHANGE);
-  enableInterrupt(LEFT_MOTOR_ENCODER_PIN_B, count_left_motor_b, CHANGE);
-  enableInterrupt(RIGHT_MOTOR_ENCODER_PIN_A, count_right_motor_a, CHANGE);
-  enableInterrupt(RIGHT_MOTOR_ENCODER_PIN_B, count_right_motor_b, CHANGE);
+  enableInterrupt(LEFT_MOTOR_ENCODER_PIN_A, count_left_motor, CHANGE);
+  enableInterrupt(LEFT_MOTOR_ENCODER_PIN_B, count_left_motor, CHANGE);
+  enableInterrupt(RIGHT_MOTOR_ENCODER_PIN_A, count_right_motor, CHANGE);
+  enableInterrupt(RIGHT_MOTOR_ENCODER_PIN_B, count_right_motor, CHANGE);
 
   // Enable speed sampling
   Timer3.initialize(speed_sample_rate);
@@ -220,6 +210,7 @@ void setup()
   while (buzzer.playCheck());
 
   // TODO Play cell count beeps
+//  SerialUSB.begin(230400);
 }
 
 void loop() 
@@ -231,8 +222,6 @@ void loop()
   noInterrupts();
   slave.buffer.left_motor_count = left_motor_count;
   slave.buffer.right_motor_count = right_motor_count;
-  slave.buffer.left_motor_speed = left_motor_speed;
-  slave.buffer.right_motor_speed = right_motor_speed;
   if (slave.buffer.clear_motor_counts) {
     left_motor_count = 0;
     right_motor_count = 0;
@@ -288,4 +277,12 @@ void loop()
 
   // All done, report any changes
   slave.finalizeWrites();
+
+//  if (time_to_debug > 1000) {
+//    time_to_debug = 0;
+//    SerialUSB.print("l: ");
+//    SerialUSB.print(left_motor_count);
+//    SerialUSB.print(" r: ");
+//    SerialUSB.println(right_motor_count);
+//  }
 }
